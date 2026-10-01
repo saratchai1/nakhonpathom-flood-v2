@@ -186,6 +186,7 @@ async function discoverDataUrls() {
   const explicit = new Set();
   const discovered = new Set();
   const common = new Set();
+  const baseHost = new URL(BASE_URL).hostname;
 
   if (EXPLICIT_DATA_URL) explicit.add(resolveUrl(EXPLICIT_DATA_URL));
 
@@ -197,39 +198,74 @@ async function discoverDataUrls() {
   ];
   commonPaths.forEach((item) => common.add(resolveUrl(item)));
 
+  const scriptQueue = [];
+  const queuedScripts = new Set();
+  const enqueueScript = (value, base) => {
+    const url = resolveUrl(value, base);
+    if (!url) return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname !== baseHost) return;
+      if (!/\.m?js(?:\?|$)/i.test(parsed.pathname + parsed.search)) return;
+    } catch { return; }
+    if (!queuedScripts.has(url)) {
+      queuedScripts.add(url);
+      scriptQueue.push(url);
+    }
+  };
+
   for (const page of ['/index.html', '/dashboard.html', '/water-comparison.html']) {
     const pageUrl = resolveUrl(page);
     try {
       const response = await fetchWithTimeout(pageUrl, { headers: { accept: 'text/html' } });
       if (!response.ok) continue;
       const html = await response.text();
-      discoverCandidatesFromText(html, pageUrl).forEach((url) => discovered.add(url));
-      const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
-        .map((m) => resolveUrl(m[1], pageUrl))
-        .filter(Boolean)
-        .slice(0, 24);
-      discoveredScripts = [...new Set([...discoveredScripts, ...scripts])].slice(0, 40);
 
-      for (const scriptUrl of scripts) {
-        try {
-          const scriptResponse = await fetchWithTimeout(scriptUrl, { headers: { accept: 'text/javascript,*/*' } });
-          if (!scriptResponse.ok) continue;
-          const js = await scriptResponse.text();
-          discoverCandidatesFromText(js, scriptUrl).forEach((url) => discovered.add(url));
-          if (new URL(scriptUrl).hostname === new URL(BASE_URL).hostname) {
-            const hints = js.split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter((line) => /(fetch\s*\(|axios|water[_-]?data|timeseries|download|export|\.csv|\.json|\.php|api\b|endpoint|supabase)/i.test(line))
-              .map((line) => line.slice(0, 800));
-            scriptHints = [...new Set([...scriptHints, ...hints])].slice(0, 80);
-          }
-        } catch {}
+      discoverCandidatesFromText(html, pageUrl)
+        .filter((url) => {
+          try {
+            const parsed = new URL(url);
+            return parsed.hostname === baseHost && !/\/src\//.test(parsed.pathname);
+          } catch { return false; }
+        })
+        .forEach((url) => discovered.add(url));
+
+      for (const match of html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)) {
+        enqueueScript(match[1], pageUrl);
       }
     } catch {}
   }
 
-  // Prioritize URLs actually discovered from the live site's HTML/JS.
-  // Common guesses are only fallback candidates.
+  for (let i = 0; i < scriptQueue.length && i < 48; i += 1) {
+    const scriptUrl = scriptQueue[i];
+    discoveredScripts = [...new Set([...discoveredScripts, scriptUrl])].slice(0, 60);
+    try {
+      const scriptResponse = await fetchWithTimeout(scriptUrl, { headers: { accept: 'text/javascript,*/*' } });
+      if (!scriptResponse.ok) continue;
+      const js = await scriptResponse.text();
+
+      discoverCandidatesFromText(js, scriptUrl)
+        .filter((url) => {
+          try {
+            const parsed = new URL(url);
+            return parsed.hostname === baseHost && !/\/src\/.*\.js$/i.test(parsed.pathname);
+          } catch { return false; }
+        })
+        .forEach((url) => discovered.add(url));
+
+      const importRegex = /(?:import\s+(?:[^'"]+?\s+from\s+)?|export\s+[^'"]+?\s+from\s+)["']([^"']+)["']/g;
+      for (const match of js.matchAll(importRegex)) enqueueScript(match[1], scriptUrl);
+      for (const match of js.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g)) enqueueScript(match[1], scriptUrl);
+
+      const hints = js.split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => /(fetch\s*\(|axios|water[_-]?data|timeseries|download|export|\.csv|\.json|\.php|api\b|endpoint|supabase|baseurl|serviceurl)/i.test(line))
+        .map((line) => `[${new URL(scriptUrl).pathname}] ${line.slice(0, 700)}`);
+      scriptHints = [...new Set([...scriptHints, ...hints])].slice(0, 120);
+    } catch {}
+  }
+
+  // Prefer actual endpoints discovered by recursively reading the site's own ES modules.
   discoveredUrls = [...new Set([
     ...explicit,
     ...discovered,

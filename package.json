@@ -1,0 +1,15 @@
+{
+  "name": "nakhonpathom-flood-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nakhon Pathom flood digital twin using live water sensors and real DEM terrain.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

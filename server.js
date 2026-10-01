@@ -7,6 +7,7 @@ import { getLatestSensors, readStations } from './src/water-su.js';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
 const port = Number(process.env.PORT || 3000);
+const startupProbeEnabled = process.env.WATER_SU_STARTUP_PROBE !== '0';
 
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -82,4 +83,27 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Nakhon Pathom Flood Digital Twin listening on :${port}`);
+
+  if (startupProbeEnabled) {
+    setTimeout(async () => {
+      try {
+        const payload = await getLatestSensors({ force: true });
+        console.log(JSON.stringify({
+          event: 'water_su_startup_probe',
+          mode: payload.mode,
+          source: payload.source,
+          sourceUrl: payload.sourceUrl,
+          sensorCount: payload.sensors?.length || 0,
+          liveRows: payload.diagnostics?.liveRows || 0,
+          discoveredCandidates: payload.diagnostics?.discoveredCandidates || 0,
+          attempts: payload.diagnostics?.attempts || []
+        }));
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: 'water_su_startup_probe_error',
+          error: error?.message || String(error)
+        }));
+      }
+    }, 750);
+  }
 });

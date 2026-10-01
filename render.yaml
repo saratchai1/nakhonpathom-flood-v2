@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: nakhonpathom-flood-v2
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: WATER_SU_BASE_URL
+        value: https://water.su.ac.th

@@ -96,6 +96,7 @@ server.listen(port, '0.0.0.0', () => {
           sensorCount: payload.sensors?.length || 0,
           liveRows: payload.diagnostics?.liveRows || 0,
           discoveredCandidates: payload.diagnostics?.discoveredCandidates || 0,
+          candidateUrls: payload.diagnostics?.candidateUrls || [],
           attempts: payload.diagnostics?.attempts || []
         }));
       } catch (error) {

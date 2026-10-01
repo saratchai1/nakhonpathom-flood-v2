@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#071525" />
+  <title>Nakhon Pathom Flood Digital Twin</title>
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">NP</div>
+        <div>
+          <div class="brand-title">Nakhon Pathom Flood Digital Twin</div>
+          <div class="brand-subtitle">ภูมิประเทศจริง + ระดับน้ำจากสถานีตรวจวัด</div>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="มุมมอง">
+        <button class="tab is-active" data-view="overview">ภาพรวมพื้นที่</button>
+        <button class="tab" data-view="canals">ระดับน้ำแต่ละสถานี</button>
+      </nav>
+      <div class="live-block">
+        <span id="live-dot" class="live-dot"></span>
+        <div>
+          <div id="source-mode" class="live-title">กำลังเชื่อมต่อข้อมูล…</div>
+          <div id="last-updated" class="live-time">—</div>
+        </div>
+        <button id="refresh-btn" class="icon-btn" title="รีเฟรชข้อมูล" aria-label="รีเฟรชข้อมูล">↻</button>
+      </div>
+    </header>
+
+    <main>
+      <div id="map" aria-label="แผนที่ Digital Twin จังหวัดนครปฐม"></div>
+
+      <section id="overview-panel" class="panel overview-panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">สถานการณ์น้ำ จังหวัดนครปฐม</div>
+            <h1>Digital Twin น้ำท่วม</h1>
+          </div>
+          <button id="collapse-overview" class="ghost-btn" title="ย่อแผง">−</button>
+        </div>
+
+        <div class="metrics">
+          <article class="metric">
+            <span>สถานีวิกฤต</span>
+            <strong id="metric-critical">—</strong>
+            <small>น้ำถึง/สูงกว่าตลิ่ง</small>
+          </article>
+          <article class="metric">
+            <span>เฝ้าระวัง</span>
+            <strong id="metric-warning">—</strong>
+            <small>freeboard ≤ 0.25 ม.</small>
+          </article>
+          <article class="metric">
+            <span>ต่ำกว่าตลิ่งน้อยสุด</span>
+            <strong id="metric-min-freeboard">—</strong>
+            <small id="metric-min-station">—</small>
+          </article>
+        </div>
+
+        <div class="model-card">
+          <div class="model-title-row">
+            <div>
+              <strong>Flood contour จาก DEM</strong>
+              <p>คำนวณระดับผิวน้ำ ม.รทก. เทียบกับภูมิประเทศจริง</p>
+            </div>
+            <label class="switch"><input id="contour-toggle" type="checkbox" checked /><span></span></label>
+          </div>
+          <div class="model-controls">
+            <button id="rebuild-model" class="primary-btn">คำนวณ contour</button>
+            <span id="model-status">รอ DEM พร้อม</span>
+          </div>
+          <div class="legend">
+            <span><i class="depth-1"></i> 0.05–0.15 ม.</span>
+            <span><i class="depth-2"></i> 0.15–0.30 ม.</span>
+            <span><i class="depth-3"></i> 0.30–0.50 ม.</span>
+            <span><i class="depth-4"></i> 0.50–1.00 ม.</span>
+            <span><i class="depth-5"></i> &gt;1.00 ม.</span>
+          </div>
+          <p class="model-note">Contour เป็นแบบจำลองจาก DEM และค่าระดับน้ำของสถานี ไม่ใช่ขอบเขตน้ำท่วมที่หน่วยงานราชการรับรอง</p>
+        </div>
+
+        <div class="station-summary-head">
+          <strong>สถานีที่ต้องดูเป็นพิเศษ</strong>
+          <span id="station-count">— สถานี</span>
+        </div>
+        <div id="priority-list" class="priority-list"></div>
+      </section>
+
+      <section id="canals-panel" class="panel canals-panel is-hidden">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">Realtime sensor</div>
+            <h2>ระดับน้ำแต่ละสถานี</h2>
+          </div>
+          <button id="fit-stations" class="ghost-btn">ดูทั้งหมด</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>สถานี</th><th>ระดับน้ำ</th><th>ตลิ่ง</th><th>เหลือ</th><th>สถานะ</th></tr>
+            </thead>
+            <tbody id="station-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside id="detail-panel" class="detail-panel is-hidden" aria-live="polite">
+        <button id="close-detail" class="detail-close" aria-label="ปิด">×</button>
+        <div class="detail-title"><span id="detail-name">—</span><small id="detail-id">—</small></div>
+        <div id="gauge" class="gauge">
+          <div class="gauge-vessel"><div id="gauge-fill" class="gauge-fill"></div><div class="gauge-bank"></div></div>
+          <div id="gauge-percent" class="gauge-percent">—</div>
+          <div id="gauge-status" class="gauge-status">—</div>
+        </div>
+        <div class="detail-caption">สัดส่วนระดับน้ำเทียบระดับตลิ่งจริง</div>
+        <dl class="detail-grid">
+          <div><dt>ระดับน้ำ</dt><dd id="detail-msl">—</dd><span>ม.รทก.</span></div>
+          <div><dt>ระดับตลิ่ง</dt><dd id="detail-bank-msl">—</dd><span>ม.รทก.</span></div>
+          <div><dt>ระดับน้ำจริง</dt><dd id="detail-depth">—</dd><span>ม.</span></div>
+          <div><dt>ระดับตลิ่งจริง</dt><dd id="detail-bank-local">—</dd><span>ม.</span></div>
+          <div><dt>ฝนสะสม</dt><dd id="detail-rain">—</dd><span>มม.</span></div>
+          <div><dt>ต่ำกว่าตลิ่ง</dt><dd id="detail-freeboard">—</dd><span>ม.</span></div>
+        </dl>
+        <div id="detail-alert" class="detail-alert">—</div>
+        <div id="detail-time" class="detail-time">—</div>
+      </aside>
+
+      <div class="map-actions">
+        <button id="pitch-btn" class="map-action">3D</button>
+        <button id="terrain-btn" class="map-action is-active">ภูมิประเทศ</button>
+        <button id="boundary-btn" class="map-action is-active">ขอบเขตจังหวัด</button>
+      </div>
+
+      <div class="attribution-note">Sensor: water.su.ac.th / CSV ที่ผู้ใช้ให้ • DEM: AWS Terrain Tiles • Basemap: OpenFreeMap / OpenStreetMap</div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

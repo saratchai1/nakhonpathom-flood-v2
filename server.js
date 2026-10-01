@@ -98,6 +98,7 @@ server.listen(port, '0.0.0.0', () => {
           discoveredCandidates: payload.diagnostics?.discoveredCandidates || 0,
           candidateUrls: payload.diagnostics?.candidateUrls || [],
           scriptUrls: payload.diagnostics?.scriptUrls || [],
+          scriptHints: payload.diagnostics?.scriptHints || [],
           attempts: payload.diagnostics?.attempts || []
         }));
       } catch (error) {

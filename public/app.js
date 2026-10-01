@@ -228,7 +228,7 @@ function renderOverview() {
   el('priority-list').innerHTML = priority.map((s) => `
     <div class="priority-item" data-station="${escapeHtml(s.id || s.device_id)}">
       <i class="status-dot ${escapeHtml(s.status || 'unknown')}"></i>
-      <div class="priority-main"><div class="priority-name">${escapeHtml(s.name || s.device_id)}</div><div class="priority-meta">${escapeHtml(s.id || s.device_id)} · ${escapeHtml(s.group || 'สถานีตรวจวัด')}</div></div>
+      <div class="priority-main"><div class="priority-name">${escapeHtml(s.name || s.device_id)}</div><div class="priority-meta">${escapeHtml(s.id || s.device_id)} · ${escapeHtml(s.group || 'สถานีตรวจวัด')} · ${escapeHtml(trendText(s.trend, s.change_1h_m))}</div></div>
       <div class="priority-value"><strong>${fmt(s.freeboard_m)} ม.</strong><span>ต่ำกว่าตลิ่ง</span></div>
     </div>`).join('');
   document.querySelectorAll('[data-station]').forEach((node) => node.addEventListener('click', () => selectStation(node.dataset.station, true)));
@@ -240,6 +240,8 @@ function renderStationTable() {
     <tr data-table-station="${escapeHtml(s.id || s.device_id)}">
       <td><strong>${escapeHtml(s.name || s.device_id)}</strong><br><small>${escapeHtml(s.id || s.device_id)} · ${escapeHtml(s.group || '')}</small></td>
       <td>${fmt(s.water_msl_m)}</td><td>${fmt(s.bank_msl_m)}</td><td>${fmt(s.freeboard_m)}</td>
+      <td class="change-cell ${changeClass(s.change_1h_m)}">${formatChange(s.change_1h_m)}</td>
+      <td>${escapeHtml(trendText(s.trend, s.change_1h_m))}</td>
       <td><span class="status-pill ${escapeHtml(s.status || 'unknown')}">${statusText(s.status)}</span></td>
     </tr>`).join('');
   document.querySelectorAll('[data-table-station]').forEach((node) => node.addEventListener('click', () => selectStation(node.dataset.tableStation, true)));
@@ -258,7 +260,9 @@ function selectStation(id, fly) {
   el('detail-bank-local').textContent = fmt(sensor.bank_local_m);
   el('detail-rain').textContent = fmt(sensor.TotalRainFall);
   el('detail-freeboard').textContent = fmt(sensor.freeboard_m);
-  el('detail-time').textContent = sensor.timestamp ? `ข้อมูลสถานี · ${formatThaiTime(Date.parse(sensor.timestamp))}` : 'ไม่พบเวลาล่าสุด';
+  el('detail-change').textContent = formatChange(sensor.change_1h_m, false);
+  el('detail-trend').textContent = trendText(sensor.trend, sensor.change_1h_m);
+  el('detail-time').textContent = sensor.timestamp ? `${sensor.is_stale ? 'ข้อมูลอาจล่าช้า · ' : 'ข้อมูลสถานี · '}${formatThaiTime(Date.parse(sensor.timestamp))}` : 'ไม่พบเวลาล่าสุด';
 
   const percent = Math.max(0, Math.min(120, numeric(sensor.fill_percent, 0)));
   const visiblePercent = Math.min(percent, 100);
@@ -420,8 +424,31 @@ function numeric(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function formatChange(value, includeUnit = true) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(3)}${includeUnit ? ' ม.' : ''}`;
+}
+
+function changeClass(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || Math.abs(n) < 0.005) return 'steady';
+  return n > 0 ? 'rising' : 'falling';
+}
+
+function trendText(trend, change) {
+  const key = String(trend || '').toLowerCase();
+  if (['rising', 'rise', 'up', 'increasing'].includes(key)) return '↑ เพิ่มขึ้น';
+  if (['falling', 'fall', 'down', 'decreasing'].includes(key)) return '↓ ลดลง';
+  if (['steady', 'stable'].includes(key)) return '→ ทรงตัว';
+  const n = Number(change);
+  if (!Number.isFinite(n) || Math.abs(n) < 0.005) return '→ ทรงตัว';
+  return n > 0 ? '↑ เพิ่มขึ้น' : '↓ ลดลง';
+}
+
 function statusText(status) {
-  return status === 'critical' ? 'วิกฤต' : status === 'warning' ? 'เฝ้าระวัง' : status === 'normal' ? 'ปกติ' : 'ไม่ทราบ';
+  return status === 'critical' ? 'วิกฤต' : status === 'warning' ? 'เฝ้าระวัง' : status === 'normal' ? 'ปกติ' : 'ข้อมูลล่าช้า';
 }
 
 function statusColor(status) {

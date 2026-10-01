@@ -96,14 +96,14 @@
         <div class="panel-head">
           <div>
             <div class="eyebrow">Realtime sensor</div>
-            <h2>ระดับน้ำแต่ละสถานี</h2>
+            <h2>ระดับน้ำแต่ละคลอง / สถานี</h2>
           </div>
           <button id="fit-stations" class="ghost-btn">ดูทั้งหมด</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>สถานี</th><th>ระดับน้ำ</th><th>ตลิ่ง</th><th>เหลือ</th><th>สถานะ</th></tr>
+              <tr><th>สถานี</th><th>ระดับน้ำ</th><th>ตลิ่ง</th><th>เหลือ</th><th>Δ 1 ชม.</th><th>แนวโน้ม</th><th>สถานะ</th></tr>
             </thead>
             <tbody id="station-table"></tbody>
           </table>
@@ -126,6 +126,8 @@
           <div><dt>ระดับตลิ่งจริง</dt><dd id="detail-bank-local">—</dd><span>ม.</span></div>
           <div><dt>ฝนสะสม</dt><dd id="detail-rain">—</dd><span>มม.</span></div>
           <div><dt>ต่ำกว่าตลิ่ง</dt><dd id="detail-freeboard">—</dd><span>ม.</span></div>
+          <div><dt>เปลี่ยนแปลง 1 ชม.</dt><dd id="detail-change">—</dd><span>ม.</span></div>
+          <div><dt>แนวโน้ม</dt><dd id="detail-trend">—</dd><span></span></div>
         </dl>
         <div id="detail-alert" class="detail-alert">—</div>
         <div id="detail-time" class="detail-time">—</div>

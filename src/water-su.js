@@ -8,7 +8,9 @@ const FALLBACK_PATH = path.join(root, 'data', 'fallback.json');
 const STATIONS_PATH = path.join(root, 'data', 'stations.json');
 
 const BASE_URL = (process.env.WATER_SU_BASE_URL || 'https://water.su.ac.th').replace(/\/$/, '');
-const EXPLICIT_DATA_URL = process.env.WATER_SU_DATA_URL || '';
+const OFFICIAL_LATEST_URL = `${BASE_URL}/api/v1/water/latest-all`;
+const OFFICIAL_READINGS_URL = `${BASE_URL}/api/v1/readings/latest`;
+const EXPLICIT_DATA_URL = process.env.WATER_SU_DATA_URL || OFFICIAL_LATEST_URL;
 const CACHE_MS = Number(process.env.WATER_SU_CACHE_MS || 60_000);
 const FETCH_TIMEOUT_MS = Number(process.env.WATER_SU_FETCH_TIMEOUT_MS || 4_000);
 
@@ -39,20 +41,37 @@ function pick(obj, names) {
 
 export function normalizeRow(row) {
   if (!row || typeof row !== 'object') return null;
-  const deviceId = String(pick(row, ['device_id', 'deviceId', 'station_id', 'stationId', 'id', 'sensor_id']) || '').trim();
+  const nested = row.data && typeof row.data === 'object' && !Array.isArray(row.data) ? row.data : {};
+  const merged = { ...row, ...nested };
+
+  const deviceId = String(pick(merged, ['device_id', 'deviceId', 'station_id', 'stationId', 'id', 'sensor_id']) || '').trim();
   if (!deviceId) return null;
 
-  const rawTime = pick(row, ['timestamp', 'received_at', 'receivedAt', 'datetime', 'date_time', 'created_at', 'time']);
+  const rawTime = pick(merged, ['timestamp', 'received_at', 'receivedAt', 'datetime', 'date_time', 'created_at', 'time']);
   const parsedTime = rawTime ? new Date(rawTime) : null;
+
+  const statusRaw = String(pick(merged, ['status']) || '').toLowerCase();
+  const normalizedStatus = ['critical', 'warning', 'normal'].includes(statusRaw) ? statusRaw : null;
 
   return {
     device_id: deviceId,
+    name: pick(merged, ['station_name', 'location_th', 'stationName', 'name']),
+    lat: finite(pick(merged, ['latitude', 'lat'])),
+    lng: finite(pick(merged, ['longitude', 'lng', 'lon'])),
     timestamp: parsedTime && !Number.isNaN(parsedTime.getTime()) ? parsedTime.toISOString() : (rawTime ? String(rawTime) : null),
-    sample_count: finite(pick(row, ['sample_count', 'sampleCount', 'samples'])),
-    TotalRainFall: finite(pick(row, ['TotalRainFall', 'totalRainFall', 'rainfall', 'rain_mm', 'rain'])),
-    water_msl_m: finite(pick(row, ['water_msl_m', 'waterMslM', 'water_msl', 'level_msl_m', 'level_msl'])),
-    water_depth_m: finite(pick(row, ['water_depth_m', 'waterDepthM', 'water_depth', 'depth_m', 'water_level_m'])),
-    freeboard_m: finite(pick(row, ['freeboard_m', 'freeboardM', 'freeboard', 'bank_freeboard_m']))
+    sample_count: finite(pick(merged, ['sample_count', 'sampleCount', 'samples'])),
+    TotalRainFall: finite(pick(merged, ['TotalRainFall', 'totalRainFall', 'rainfall', 'rain_mm', 'rain'])),
+    water_msl_m: finite(pick(merged, ['water_msl_m', 'waterMslM', 'water_msl', 'level_msl_m', 'level_msl'])),
+    water_depth_m: finite(pick(merged, ['water_depth_m', 'waterDepthM', 'water_depth', 'depth_m', 'water_level_m'])),
+    freeboard_m: finite(pick(merged, ['freeboard_m', 'freeboardM', 'freeboard', 'bank_freeboard_m'])),
+    bank_msl_m: finite(pick(merged, ['bank_level_msl_m', 'bank_msl_m', 'bank_msl'])),
+    bank_local_m: finite(pick(merged, ['local_height_m', 'bank_local_m', 'local_height'])),
+    fill_percent: finite(pick(merged, ['water_level_percent', 'fill_percent'])),
+    status: normalizedStatus,
+    is_stale: Boolean(pick(merged, ['is_stale', 'stale'])),
+    change_1h_m: finite(pick(merged, ['change_1h_m', 'change1h_m'])),
+    rate_m_per_hour: finite(pick(merged, ['rate_m_per_hour', 'rate'])),
+    trend: pick(merged, ['trend'])
   };
 }
 
@@ -90,15 +109,29 @@ function parseCsvLine(line) {
   return out;
 }
 
-export function extractRows(payload) {
+export function extractRows(payload, depth = 0) {
+  if (depth > 4) return [];
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
-  const likelyKeys = ['data', 'rows', 'results', 'sensors', 'stations', 'water_data', 'waterData', 'records', 'items'];
+
+  const likelyKeys = ['stations', 'data', 'rows', 'results', 'sensors', 'water_data', 'waterData', 'records', 'items'];
   for (const key of likelyKeys) {
     if (Array.isArray(payload[key])) return payload[key];
   }
+
+  for (const key of likelyKeys) {
+    if (payload[key] && typeof payload[key] === 'object') {
+      const nested = extractRows(payload[key], depth + 1);
+      if (nested.length) return nested;
+    }
+  }
+
   for (const value of Object.values(payload)) {
     if (Array.isArray(value) && value.length && typeof value[0] === 'object') return value;
+    if (value && typeof value === 'object') {
+      const nested = extractRows(value, depth + 1);
+      if (nested.length) return nested;
+    }
   }
   return [];
 }
@@ -312,18 +345,42 @@ async function tryLive() {
   const urls = await discoverDataUrls();
   const attempts = [];
   let attemptCount = 0;
-  for (const candidate of urls.slice(0, 24)) {
+
+  for (const candidate of urls.slice(0, 30)) {
     for (const url of queryVariants(candidate).slice(0, 2)) {
-      if (attemptCount >= 18) return { rows: [], sourceUrl: null, attempts };
+      if (attemptCount >= 24) return { rows: [], sourceUrl: null, attempts };
       attemptCount += 1;
       try {
         const response = await fetchWithTimeout(url);
         attempts.push({ url, status: response.status });
         if (!response.ok) continue;
+
         const rows = await decodeResponse(response);
-        const latest = latestByDevice(rows);
-        const useful = latest.filter((row) => row.water_msl_m !== null || row.water_depth_m !== null || row.freeboard_m !== null);
-        if (useful.length >= 3) return { rows: useful, sourceUrl: url, attempts };
+        let useful = latestByDevice(rows).filter((row) =>
+          row.water_msl_m !== null || row.water_depth_m !== null || row.freeboard_m !== null
+        );
+
+        if (useful.length >= 3) {
+          // The official "latest-all" endpoint has authoritative station position/status,
+          // while "readings/latest" also carries rainfall. Merge rainfall when available.
+          if (candidate.includes('/api/v1/water/latest-all')) {
+            try {
+              const rainfallResponse = await fetchWithTimeout(OFFICIAL_READINGS_URL);
+              if (rainfallResponse.ok) {
+                const rainfallRows = latestByDevice(await decodeResponse(rainfallResponse));
+                const rainfallById = new Map(rainfallRows.map((row) => [row.device_id, row]));
+                useful = useful.map((row) => {
+                  const extra = rainfallById.get(row.device_id);
+                  return {
+                    ...row,
+                    TotalRainFall: extra?.TotalRainFall ?? row.TotalRainFall
+                  };
+                });
+              }
+            } catch {}
+          }
+          return { rows: useful, sourceUrl: candidate, attempts };
+        }
       } catch (error) {
         attempts.push({ url, error: error?.name || 'fetch_error' });
       }
@@ -336,16 +393,35 @@ function enrich(rows, stations) {
   const stationById = new Map(stations.map((station) => [station.id, station]));
   return rows.map((row) => {
     const station = stationById.get(row.device_id) || {};
-    const bankMsl = row.water_msl_m !== null && row.freeboard_m !== null ? row.water_msl_m + row.freeboard_m : null;
-    const bankLocal = row.water_depth_m !== null && row.freeboard_m !== null ? row.water_depth_m + row.freeboard_m : null;
-    const ratio = bankLocal && row.water_depth_m !== null ? (row.water_depth_m / bankLocal) * 100 : null;
+    const bankMsl = row.bank_msl_m ?? (
+      row.water_msl_m !== null && row.freeboard_m !== null ? row.water_msl_m + row.freeboard_m : null
+    );
+    const bankLocal = row.bank_local_m ?? (
+      row.water_depth_m !== null && row.freeboard_m !== null ? row.water_depth_m + row.freeboard_m : null
+    );
+    const ratio = row.fill_percent ?? (
+      bankLocal && row.water_depth_m !== null ? (row.water_depth_m / bankLocal) * 100 : null
+    );
+    const computedStatus = row.freeboard_m === null
+      ? 'unknown'
+      : row.freeboard_m <= 0
+        ? 'critical'
+        : row.freeboard_m <= 0.25
+          ? 'warning'
+          : 'normal';
+    const status = row.is_stale ? 'unknown' : (row.status || computedStatus);
+
     return {
       ...station,
       ...row,
+      id: row.device_id,
+      name: row.name || station.name || row.device_id,
+      lat: row.lat ?? station.lat ?? null,
+      lng: row.lng ?? station.lng ?? null,
       bank_msl_m: bankMsl,
       bank_local_m: bankLocal,
       fill_percent: ratio,
-      status: row.freeboard_m === null ? 'unknown' : row.freeboard_m <= 0 ? 'critical' : row.freeboard_m <= 0.25 ? 'warning' : 'normal'
+      status
     };
   });
 }

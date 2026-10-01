@@ -3,7 +3,7 @@ services:
     name: nakhonpathom-flood-v2
     runtime: node
     plan: free
-    buildCommand: ""
+    buildCommand: npm test
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

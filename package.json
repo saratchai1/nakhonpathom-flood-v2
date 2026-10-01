@@ -7,9 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --check server.js && node --check src/water-su.js && node --check public/app.js && node --test"
+    "test": "node --check server.js && node --check src/water-su.js && node --check public/app.js && node --check public/flood-bands.js && node --test",
+    "pretest": "npm ci --include=dev --ignore-scripts"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@turf/area": "^7.4.0",
+    "@turf/difference": "^7.4.0",
+    "d3-contour": "^4.0.2"
   }
 }

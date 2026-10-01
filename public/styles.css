@@ -17,3 +17,6 @@
 @media(max-width:900px){.map-actions{right:10px;bottom:75px;max-width:calc(100% - 20px)}.map-toolbar{gap:4px}.map-toolbar .map-action{padding:8px;font-size:10px;min-height:40px}.camera-controls{gap:4px}.map-status{top:52%;font-size:11px}.maplibregl-ctrl-attrib{max-width:calc(100vw - 20px);font-size:9px}.detail-panel{bottom:185px;max-height:calc(100% - 195px)}.live-block{display:flex;min-width:0;margin-left:auto}.live-time,.live-block .icon-btn{display:none}.live-title{font-size:9px}.brand-title{font-size:11px}}
 @media(max-width:540px){.overview-panel.compact .metrics,.overview-panel.compact .model-card,.overview-panel.compact .station-summary-head,.overview-panel.compact .priority-list{display:none}.overview-panel.compact .panel-head{margin-bottom:0;border:0;padding-bottom:0}.map-toolbar{max-width:370px}.map-toolbar .map-action{font-size:9px}.camera-controls .map-action{min-width:38px}.brand-title{max-width:130px}.live-title{max-width:125px}}
 @media(min-width:901px){.map-status{left:auto;right:18px;top:18px;transform:none;width:min(500px,calc(100% - 480px))}}
+
+.depth-legend-title{font-size:10px;font-weight:700;margin-top:10px;color:#475569}.depth-note{font-size:9px;line-height:1.5;color:#64748b;margin:6px 0 0}
+@media(max-width:540px){.model-card .legend{display:flex;font-size:9px;gap:6px 9px}.depth-legend-title{font-size:9px}.depth-note{font-size:9px}}

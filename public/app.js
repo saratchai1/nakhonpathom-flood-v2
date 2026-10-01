@@ -1,8 +1,9 @@
-import { contours as d3Contours } from 'https://cdn.jsdelivr.net/npm/d3-contour@4/+esm';
-import * as turf from 'https://cdn.jsdelivr.net/npm/@turf/turf@7/+esm';
+import { contours as d3Contours } from 'https://cdn.jsdelivr.net/npm/d3-contour@4.0.2/+esm';
+import * as turf from 'https://cdn.jsdelivr.net/npm/@turf/turf@7.4.0/+esm';
+import { FLOOD_BANDS, buildFloodBands } from './flood-bands.js?v=20261001-depth-heatmap';
 
 const MAP_BOUNDS = [99.86, 13.62, 100.29, 13.96];
-const FLOOD_THRESHOLDS = [0.05, 0.15, 0.30, 0.50, 1.00, 1.50];
+const FLOOD_THRESHOLDS = FLOOD_BANDS.map((band) => band.min);
 const REFRESH_MS = 60_000;
 const TERRAIN_EXAGGERATION_NORMAL = 1;
 const TERRAIN_EXAGGERATION_HIGH = 10;
@@ -284,16 +285,17 @@ function addFloodLayers() {
   map.addLayer({
     id: 'flood-fill', type: 'fill', source: 'flood-contours',
     paint: {
-      'fill-color': ['step', ['get', 'depth'], '#dbeafe', 0.15, '#93c5fd', 0.30, '#60a5fa', 0.50, '#3b82f6', 1.00, '#1d4ed8', 1.50, '#1e3a8a'],
-      'fill-opacity': 0.46
+      'fill-color': ['get', 'color'],
+      'fill-opacity': ['get', 'opacity'],
+      'fill-antialias': false
     }
   });
   map.addLayer({
     id: 'flood-line', type: 'line', source: 'flood-contours',
     paint: {
-      'line-color': ['step', ['get', 'depth'], '#93c5fd', 0.15, '#60a5fa', 0.30, '#3b82f6', 0.50, '#2563eb', 1.00, '#1e40af'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 13, 1.6],
-      'line-opacity': 0.88
+      'line-color': ['get', 'color'],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.3, 13, 0.8],
+      'line-opacity': 0.45
     }
   });
 }
@@ -467,24 +469,10 @@ async function rebuildFloodModel() {
       throw new Error('DEM tiles ยังโหลดไม่พอ ลองซูม/รอสักครู่แล้วคำนวณใหม่');
     }
 
-    el('model-status').textContent = 'กำลังสร้าง flood contour… 85%';
+    el('model-status').textContent = 'กำลังสร้าง heatmap ความลึก… 85%';
     await nextFrame();
     const raw = d3Contours().size([nx, ny]).thresholds(FLOOD_THRESHOLDS)(values);
-    const features = raw
-      .filter((contour) => contour.coordinates?.length)
-      .map((contour) => ({
-        type: 'Feature',
-        properties: { depth: Number(contour.value) },
-        geometry: {
-          type: 'MultiPolygon',
-          coordinates: contour.coordinates.map((polygon) => polygon.map((ring) => ring.map(([x, y]) => [
-            bbox[0] + (x / (nx - 1)) * (bbox[2] - bbox[0]),
-            bbox[1] + (y / (ny - 1)) * (bbox[3] - bbox[1])
-          ])))
-        }
-      }));
-
-    state.contourData = featureCollection(features);
+    state.contourData = buildFloodBands(raw, bbox, nx, ny, turf.difference);
     map.getSource('flood-contours')?.setData(state.contourData);
     state.modelReady = true;
     el('model-status').textContent = `พร้อม · ${terrainSamples.toLocaleString('th-TH')} DEM samples`;
@@ -671,6 +659,8 @@ el('boundary-btn').addEventListener('click', () => {
   el('boundary-btn').setAttribute('aria-pressed', String(state.boundaryEnabled));
 });
 
+el('flood-legend').innerHTML = FLOOD_BANDS.map((band) =>
+  `<span><i style="background:${band.color}"></i>${band.label}</span>`).join('');
 setMapControlsEnabled(false);
 initializeMap();
 refreshSensors();

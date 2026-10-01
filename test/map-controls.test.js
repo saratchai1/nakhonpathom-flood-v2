@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { FLOOD_BANDS, buildFloodBands } from '../public/flood-bands.js';
 
 const app = (await fs.readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
   .replace(/^import .*;\n/gm, '');
@@ -68,7 +69,7 @@ function harness({ webgl = true, elevation = 10 } = {}) {
     fetch: async (url) => ({ ok: true, json: async () => url.startsWith('/api/') ? { mode: 'live', sensors: fixture } : { features: [] } }),
     setTimeout() {}, setInterval() {}, requestAnimationFrame: (fn) => fn(),
     d3Contours: () => { const f = (values) => { contourValues = values.slice(); return [{ value: 1, coordinates: [[[[0, 0], [10, 0], [10, 10], [0, 0]]]] }]; }; f.size = () => f; f.thresholds = () => f; return f; },
-    turf: {}, Intl, Date, Math, Number, String, console
+    FLOOD_BANDS, buildFloodBands, turf: {}, Intl, Date, Math, Number, String, console
   });
   vm.runInContext(app, context);
   return { context, m, node, events, layers, sources, queries, get contourValues() { return contourValues; },

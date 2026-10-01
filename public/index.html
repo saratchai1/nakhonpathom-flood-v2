@@ -7,7 +7,7 @@
   <title>Nakhon Pathom Flood Digital Twin</title>
   <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="/styles.css?v=20261001-10x-2" />
+  <link rel="stylesheet" href="/styles.css?v=20261001-depth-heatmap" />
 </head>
 <body>
   <div id="app">
@@ -67,23 +67,19 @@
         <div class="model-card">
           <div class="model-title-row">
             <div>
-              <strong>Flood contour จาก DEM</strong>
+              <strong>Heatmap ความลึกน้ำโดยประมาณ</strong>
               <p>คำนวณระดับผิวน้ำ ม.รทก. เทียบกับภูมิประเทศจริง</p>
             </div>
-            <label class="switch"><input aria-label="แสดง flood contour" id="contour-toggle" type="checkbox" checked /><span></span></label>
+            <label class="switch"><input aria-label="แสดง heatmap ความลึกน้ำ" id="contour-toggle" type="checkbox" checked /><span></span></label>
           </div>
           <div class="model-controls">
-            <button data-map-control id="rebuild-model" class="primary-btn">คำนวณ contour</button>
+            <button data-map-control id="rebuild-model" class="primary-btn">คำนวณ heatmap</button>
             <span id="model-status">รอ DEM พร้อม</span>
           </div>
-          <div class="legend">
-            <span><i class="depth-1"></i> 0.05–0.15 ม.</span>
-            <span><i class="depth-2"></i> 0.15–0.30 ม.</span>
-            <span><i class="depth-3"></i> 0.30–0.50 ม.</span>
-            <span><i class="depth-4"></i> 0.50–1.00 ม.</span>
-            <span><i class="depth-5"></i> &gt;1.00 ม.</span>
-          </div>
-          <div id="relief-badge" class="relief-badge">Vertical exaggeration ×10</div><p class="model-note">มุมมองภูมิประเทศขยายความสูง ×10 เพื่อให้พื้นที่ราบเห็นสูง–ต่ำชัดขึ้น แต่ DEM, ระดับน้ำ และค่าที่ใช้คำนวณ contour ยังเป็นค่าจริง ไม่ได้คูณ 10</p><p class="screening-note">เป็นการคัดกรองจาก DEM และสถานีตรวจวัด ไม่ใช่ขอบเขตน้ำท่วมรับรองอย่างเป็นทางการ หรือแบบจำลองอุทกพลศาสตร์ 2D</p>
+          <div class="depth-legend-title">ความลึกโดยประมาณ · ฟ้าอ่อน → น้ำเงิน → ม่วง</div>
+          <div id="flood-legend" class="legend" aria-label="สีตามความลึกน้ำโดยประมาณ"></div>
+          <p class="depth-note">สีอ่อน = น้ำตื้น · สีเข้ม/ม่วง = น้ำลึก · ไม่ระบายพื้นที่ต่ำกว่า 5 ซม. หรือที่ไม่มีข้อมูล</p>
+          <div id="relief-badge" class="relief-badge">Vertical exaggeration ×10</div><p class="model-note">มุมมองภูมิประเทศขยายความสูง ×10 เพื่อให้พื้นที่ราบเห็นสูง–ต่ำชัดขึ้น แต่ DEM, ระดับน้ำ และค่าที่ใช้คำนวณ contour ยังเป็นค่าจริง ไม่ได้คูณ 10</p><p class="screening-note">ขอบเขตสีเป็นพื้นที่ประเมินจาก DEM และสถานีตรวจวัด อาจกว้างกว่าน้ำท่วมจริง ไม่ใช่ขอบเขตน้ำท่วมรับรองอย่างเป็นทางการ หรือแบบจำลองอุทกพลศาสตร์ 2D</p>
         </div>
 
         <div class="station-summary-head">
@@ -163,6 +159,6 @@
   </div>
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script type="module" src="/app.js?v=20261001-10x"></script>
+  <script type="module" src="/app.js?v=20261001-depth-heatmap"></script>
 </body>
 </html>

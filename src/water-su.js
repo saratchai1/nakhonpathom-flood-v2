@@ -15,6 +15,7 @@ const FETCH_TIMEOUT_MS = Number(process.env.WATER_SU_FETCH_TIMEOUT_MS || 4_000);
 let cached = null;
 let cachedAt = 0;
 let discoveredUrls = [];
+let discoveredScripts = [];
 let discoveryAt = 0;
 let fallbackCache = null;
 let stationCache = null;
@@ -156,13 +157,25 @@ function isCandidate(url) {
 export function discoverCandidatesFromText(text, baseUrl = BASE_URL) {
   const found = new Set();
   const add = (value) => {
-    const url = resolveUrl(value, baseUrl);
-    if (isCandidate(url)) found.add(url);
+    const raw = String(value || '').trim();
+    if (!raw || raw.startsWith('data:')) return;
+    if (!(raw.includes('/') || /\.(?:json|csv|php)(?:[?#]|$)/i.test(raw))) return;
+    const url = resolveUrl(raw, baseUrl);
+    if (!url || !isCandidate(url)) return;
+    try {
+      const parsed = new URL(url);
+      if (/^(?:unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)$/i.test(parsed.hostname)) return;
+    } catch {}
+    found.add(url);
   };
 
-  for (const match of String(text || '').matchAll(/fetch\s*\(\s*[`'"]([^`'"]+)[`'"]/g)) add(match[1]);
-  for (const match of String(text || '').matchAll(/(?:url|endpoint|apiUrl|dataUrl|downloadUrl)\s*[:=]\s*[`'"]([^`'"]+)[`'"]/gi)) add(match[1]);
-  for (const match of String(text || '').matchAll(/["'`](\/?(?:api|data|download|export)[^"'`\s]*)["'`]/gi)) add(match[1]);
+  const source = String(text || '');
+  for (const match of source.matchAll(/fetch\s*\(\s*[`'"]([^`'"]+)[`'"]/g)) add(match[1]);
+  for (const match of source.matchAll(/axios\.(?:get|post)\s*\(\s*[`'"]([^`'"]+)[`'"]/gi)) add(match[1]);
+  for (const match of source.matchAll(/\$\.(?:get|getJSON|post)\s*\(\s*[`'"]([^`'"]+)[`'"]/gi)) add(match[1]);
+  for (const match of source.matchAll(/(?:url|endpoint|apiUrl|dataUrl|downloadUrl)\s*[:=]\s*[`'"]([^`'"]+)[`'"]/gi)) add(match[1]);
+  for (const match of source.matchAll(/[`'"]((?:https?:\/\/|\/|\.\/|\.\.\/)[^`'"]*(?:api|water|sensor|station|download|export|data|telemetry|level)[^`'"]*)[`'"]/gi)) add(match[1]);
+  for (const match of source.matchAll(/[`'"]([^\s`'"]+\.(?:json|csv|php)(?:\?[^\s`'"]*)?)[`'"]/gi)) add(match[1]);
   return [...found];
 }
 
@@ -194,6 +207,7 @@ async function discoverDataUrls() {
         .map((m) => resolveUrl(m[1], pageUrl))
         .filter(Boolean)
         .slice(0, 24);
+      discoveredScripts = [...new Set([...discoveredScripts, ...scripts])].slice(0, 40);
 
       for (const scriptUrl of scripts) {
         try {
@@ -306,8 +320,9 @@ async function buildPayload(live, fallback, stations) {
     diagnostics: {
       liveRows: live.rows.length,
       discoveredCandidates: discoveredUrls.length,
-      candidateUrls: discoveredUrls.slice(0, 16),
-      attempts: live.attempts.slice(-12)
+      candidateUrls: discoveredUrls.slice(0, 24),
+      scriptUrls: discoveredScripts.slice(0, 24),
+      attempts: live.attempts.slice(-18)
     }
   };
 }
@@ -349,6 +364,7 @@ export function resetCacheForTests() {
   cached = null;
   cachedAt = 0;
   discoveredUrls = [];
+  discoveredScripts = [];
   discoveryAt = 0;
   backgroundRefresh = null;
 }

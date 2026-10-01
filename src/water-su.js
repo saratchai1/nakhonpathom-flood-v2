@@ -168,16 +168,20 @@ export function discoverCandidatesFromText(text, baseUrl = BASE_URL) {
 
 async function discoverDataUrls() {
   if (discoveredUrls.length && Date.now() - discoveryAt < 30 * 60_000) return discoveredUrls;
-  const urls = new Set();
-  if (EXPLICIT_DATA_URL) urls.add(resolveUrl(EXPLICIT_DATA_URL));
 
-  const common = [
+  const explicit = new Set();
+  const discovered = new Set();
+  const common = new Set();
+
+  if (EXPLICIT_DATA_URL) explicit.add(resolveUrl(EXPLICIT_DATA_URL));
+
+  const commonPaths = [
     '/api/water-data', '/api/water_data', '/api/data', '/api/latest', '/api/latest-water',
     '/api/water/latest', '/api/sensors/latest', '/api/sensors', '/api/stations', '/api/download',
     '/data/latest.json', '/data/water_data.json', '/water_data.json', '/latest.json',
     '/get_data.php', '/api/get_data.php', '/data.php'
   ];
-  common.forEach((item) => urls.add(resolveUrl(item)));
+  commonPaths.forEach((item) => common.add(resolveUrl(item)));
 
   for (const page of ['/index.html', '/dashboard.html', '/water-comparison.html']) {
     const pageUrl = resolveUrl(page);
@@ -185,20 +189,31 @@ async function discoverDataUrls() {
       const response = await fetchWithTimeout(pageUrl, { headers: { accept: 'text/html' } });
       if (!response.ok) continue;
       const html = await response.text();
-      discoverCandidatesFromText(html, pageUrl).forEach((url) => urls.add(url));
-      const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map((m) => resolveUrl(m[1], pageUrl)).filter(Boolean).slice(0, 16);
+      discoverCandidatesFromText(html, pageUrl).forEach((url) => discovered.add(url));
+      const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
+        .map((m) => resolveUrl(m[1], pageUrl))
+        .filter(Boolean)
+        .slice(0, 24);
+
       for (const scriptUrl of scripts) {
         try {
           const scriptResponse = await fetchWithTimeout(scriptUrl, { headers: { accept: 'text/javascript,*/*' } });
           if (!scriptResponse.ok) continue;
           const js = await scriptResponse.text();
-          discoverCandidatesFromText(js, scriptUrl).forEach((url) => urls.add(url));
+          discoverCandidatesFromText(js, scriptUrl).forEach((url) => discovered.add(url));
         } catch {}
       }
     } catch {}
   }
 
-  discoveredUrls = [...urls].filter(Boolean);
+  // Prioritize URLs actually discovered from the live site's HTML/JS.
+  // Common guesses are only fallback candidates.
+  discoveredUrls = [...new Set([
+    ...explicit,
+    ...discovered,
+    ...common
+  ].filter(Boolean))];
+
   discoveryAt = Date.now();
   return discoveredUrls;
 }
@@ -291,6 +306,7 @@ async function buildPayload(live, fallback, stations) {
     diagnostics: {
       liveRows: live.rows.length,
       discoveredCandidates: discoveredUrls.length,
+      candidateUrls: discoveredUrls.slice(0, 16),
       attempts: live.attempts.slice(-12)
     }
   };

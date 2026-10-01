@@ -82,7 +82,7 @@
             <span><i class="depth-4"></i> 0.50–1.00 ม.</span>
             <span><i class="depth-5"></i> &gt;1.00 ม.</span>
           </div>
-          <p class="model-note">Contour เป็นแบบจำลองจาก DEM และค่าระดับน้ำของสถานี ไม่ใช่ขอบเขตน้ำท่วมที่หน่วยงานราชการรับรอง</p>
+          <div id="relief-badge" class="relief-badge">Vertical exaggeration ×5</div><p class="model-note">มุมมองภูมิประเทศขยายความสูง ×5 เพื่อให้พื้นที่ราบเห็นสูง–ต่ำชัดขึ้น แต่ DEM, ระดับน้ำ และค่าที่ใช้คำนวณ contour ยังเป็นค่าจริง ไม่ได้คูณ 5</p>
         </div>
 
         <div class="station-summary-head">
@@ -136,6 +136,7 @@
       <div class="map-actions">
         <button id="pitch-btn" class="map-action">3D</button>
         <button id="terrain-btn" class="map-action is-active">ภูมิประเทศ</button>
+        <button id="relief-btn" class="map-action is-active" aria-pressed="true" title="สลับความสูงแสดงผล 1× / 5×">ความสูง ×5</button>
         <button id="boundary-btn" class="map-action is-active">ขอบเขตจังหวัด</button>
       </div>
 

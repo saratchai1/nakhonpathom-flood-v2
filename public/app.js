@@ -5,7 +5,7 @@ const MAP_BOUNDS = [99.86, 13.62, 100.29, 13.96];
 const FLOOD_THRESHOLDS = [0.05, 0.15, 0.30, 0.50, 1.00, 1.50];
 const REFRESH_MS = 60_000;
 const TERRAIN_EXAGGERATION_NORMAL = 1;
-const TERRAIN_EXAGGERATION_HIGH = 5;
+const TERRAIN_EXAGGERATION_HIGH = 10;
 
 const state = {
   sensors: [],
@@ -18,37 +18,129 @@ const state = {
   terrainEnabled: true,
   terrainExaggeration: TERRAIN_EXAGGERATION_HIGH,
   boundaryEnabled: true,
-  rotating3d: false,
-  rotationFrame: null,
-  rotationLastTime: null
+  basemap: 'map',
+  baseLayers: [],
+  mapReady: false
 };
 
 const el = (id) => document.getElementById(id);
 const fmt = (value, digits = 2) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
 
-const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/bright',
-  center: [100.075, 13.805],
-  zoom: 10.35,
-  pitch: 55,
-  bearing: -7,
-  antialias: true,
-  hash: false
-});
+// Sensor data must still load when this browser cannot render WebGL.
+let map = null;
+function initializeMap() {
+  try {
+    const probe = document.createElement('canvas');
+    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
+    if (!gl) throw new Error('WebGL unavailable');
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/bright',
+      center: [100.075, 13.805], zoom: 10.35, pitch: 55, bearing: -7,
+      maxPitch: 75, dragRotate: true, touchPitch: true, antialias: true, hash: false
+    });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
+    map.on('error', (event) => {
+      el('map-status').textContent = `โหลดแผนที่ไม่สำเร็จ: ${event.error?.message || 'ตรวจการเชื่อมต่อ'}`;
+      el('map-status').classList.remove('is-hidden');
+    });
+    map.on('load', async () => {
+      state.baseLayers = map.getStyle().layers.map((layer) => ({
+        id: layer.id, visibility: layer.layout?.visibility || 'visible'
+      }));
+      addBasemaps();
+      addTerrain();
+      addProvinceBoundary();
+      addFloodLayers();
+      addSensorLayers();
+      tryAdd3DBuildings();
+      state.mapReady = true;
+      el('map').dataset.renderer = 'webgl';
+      setMapControlsEnabled(true);
+      updateSensorSource();
+      applyBasemap();
+      updateCameraReadout();
+      map.on('move', updateCameraReadout);
+      map.on('idle', () => {
+        el('map').dataset.tilesLoaded = String(map.areTilesLoaded());
+      });
+      await refreshSensors();
+      // Sample only after the currently visible DEM tiles have settled.
+      if (map.areTilesLoaded()) await rebuildFloodModel();
+      else map.once('idle', () => rebuildFloodModel());
+    });
+  } catch {
+    map = null;
+    el('map-status').textContent = 'แผนที่ 3D ใช้ WebGL ซึ่ง browser นี้ไม่รองรับ กรุณาเปิดด้วย browser ที่รองรับ WebGL — ข้อมูลสถานียังดูได้ตามปกติ';
+    el('map-status').classList.remove('is-hidden');
+    el('map').dataset.renderer = 'unavailable';
+    el('model-status').textContent = 'คำนวณ contour ไม่ได้: WebGL ไม่พร้อม';
+  }
+}
 
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
+function setMapControlsEnabled(enabled) {
+  document.querySelectorAll('[data-map-control]').forEach((button) => { button.disabled = !enabled; });
+  el('contour-toggle').disabled = !enabled;
+}
 
-map.on('load', async () => {
-  addTerrain();
-  addProvinceBoundary();
-  addSensorLayers();
-  addFloodLayers();
-  tryAdd3DBuildings();
-  await refreshSensors();
-  setTimeout(() => rebuildFloodModel(), 1800);
-});
+function addBasemaps() {
+  const before = state.baseLayers[0]?.id;
+  // Public noncommercial map display; see docs/BASEMAP_SOURCES.md for terms.
+  map.addSource('base-satellite', {
+    type: 'raster', tileSize: 256, maxzoom: 19,
+    tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+    attribution: 'Imagery © Esri, Vantor, Earthstar Geographics, GIS User Community · <a href="https://www.esri.com/en-us/legal/terms/web-site-service" target="_blank" rel="noopener">Esri terms</a>'
+  });
+  map.addSource('base-contour', {
+    type: 'raster', tileSize: 256, maxzoom: 17,
+    tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png'],
+    attribution: 'Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM · Map style © <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA</a>)'
+  });
+  for (const mode of ['satellite', 'contour']) {
+    map.addLayer({ id: `base-${mode}`, type: 'raster', source: `base-${mode}`,
+      layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0 } }, before);
+  }
+}
+
+function applyBasemap() {
+  if (!map || !state.mapReady) return;
+  for (const layer of state.baseLayers) {
+    map.setLayoutProperty(layer.id, 'visibility', state.basemap === 'map' ? layer.visibility : 'none');
+  }
+  for (const mode of ['satellite', 'contour']) {
+    map.setLayoutProperty(`base-${mode}`, 'visibility', state.basemap === mode ? 'visible' : 'none');
+  }
+  document.querySelectorAll('[data-basemap]').forEach((button) => {
+    const active = button.dataset.basemap === state.basemap;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  const names = { map: 'แผนที่', satellite: 'ดาวเทียม', contour: 'Contour' };
+  el('basemap-btn').textContent = `ชั้นแผนที่ · ${names[state.basemap]}`;
+  el('map').dataset.basemap = state.basemap;
+  el('map').dataset.tilesLoaded = 'false';
+  el('map-status').classList.add('is-hidden');
+  // No setStyle, camera changes, overlay mutations or model recomputation here.
+}
+
+function updateCameraReadout() {
+  if (!map) return;
+  el('camera-readout').textContent = `ทิศ ${Math.round(map.getBearing())}° · เงย ${Math.round(map.getPitch())}°`;
+}
+
+function adjustCamera(action) {
+  if (!map || !state.mapReady) return;
+  map.stop();
+  const camera = { center: map.getCenter(), zoom: map.getZoom(), duration: 200 };
+  if (action === 'left') camera.bearing = map.getBearing() - 15;
+  if (action === 'right') camera.bearing = map.getBearing() + 15;
+  if (action === 'up') camera.pitch = Math.min(75, map.getPitch() + 10);
+  if (action === 'down') camera.pitch = Math.max(0, map.getPitch() - 10);
+  if (action === 'north') camera.bearing = 0;
+  map.easeTo(camera);
+}
 
 function featureCollection(features) {
   return { type: 'FeatureCollection', features };
@@ -99,13 +191,18 @@ function applyTerrainView() {
     if (map.getLayer('terrain-hillshade')) map.setLayoutProperty('terrain-hillshade', 'visibility', 'none');
   }
 
+  el('map').dataset.exaggeration = String(state.terrainExaggeration);
+  el('map').dataset.terrainEnabled = String(state.terrainEnabled);
   const terrainButton = el('terrain-btn');
-  if (terrainButton) terrainButton.classList.toggle('is-active', state.terrainEnabled);
+  if (terrainButton) {
+    terrainButton.classList.toggle('is-active', state.terrainEnabled);
+    terrainButton.setAttribute('aria-pressed', String(state.terrainEnabled));
+  }
 
   const reliefButton = el('relief-btn');
   if (reliefButton) {
     const isHigh = state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH;
-    reliefButton.textContent = `ความสูง ×${isHigh ? 5 : 1}`;
+    reliefButton.textContent = `ความสูง ×${isHigh ? 10 : 1}`;
     reliefButton.classList.toggle('is-active', isHigh && state.terrainEnabled);
     reliefButton.setAttribute(
       'aria-pressed',
@@ -247,7 +344,7 @@ function updateSensorSource() {
     geometry: { type: 'Point', coordinates: [Number(sensor.lng), Number(sensor.lat)] },
     properties: { ...sensor, id: sensor.id || sensor.device_id, name: sensor.name || sensor.device_id }
   }));
-  map.getSource('sensors')?.setData(featureCollection(features));
+  map?.getSource('sensors')?.setData(featureCollection(features));
 }
 
 function renderStatus(payload) {
@@ -328,13 +425,13 @@ function selectStation(id, fly) {
       ? `เหลือ freeboard เพียง ${fmt(sensor.freeboard_m)} ม.`
       : `ต่ำกว่าตลิ่ง ${fmt(sensor.freeboard_m)} ม.`;
 
-  if (fly) {
+  if (fly && map && state.mapReady) {
     map.flyTo({ center: [Number(sensor.lng), Number(sensor.lat)], zoom: Math.max(map.getZoom(), 12.2), pitch: 52, duration: 900 });
   }
 }
 
 async function rebuildFloodModel() {
-  if (state.modelRunning || !state.sensors.length || !map.getSource('terrain-dem')) return;
+  if (!map || !state.mapReady || !state.terrainEnabled || state.modelRunning || !state.sensors.length || !map.getSource('terrain-dem')) return;
   state.modelRunning = true;
   el('rebuild-model').disabled = true;
   el('model-status').textContent = 'กำลังอ่าน DEM… 0%';
@@ -353,7 +450,7 @@ async function rebuildFloodModel() {
         if (state.boundary && !safePointInBoundary([lng, lat], state.boundary)) continue;
         let elevation = null;
         try { elevation = map.queryTerrainElevation([lng, lat], { exaggerated: false }); } catch {}
-        if (!Number.isFinite(Number(elevation))) continue;
+        if (elevation === null || elevation === undefined || !Number.isFinite(Number(elevation))) continue;
         terrainSamples += 1;
         const water = interpolateWaterSurface(lng, lat);
         if (!water || water.nearestKm > 14 || water.confidence < 0.10) continue;
@@ -455,7 +552,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 function fitStations() {
   const coords = state.sensors.map((s) => [Number(s.lng), Number(s.lat)]).filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat));
-  if (!coords.length) return;
+  if (!map || !state.mapReady || !coords.length) return;
   const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
   map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 380 }, duration: 900, maxZoom: 12 });
 }
@@ -528,40 +625,27 @@ el('contour-toggle').addEventListener('change', (event) => {
   if (map.getLayer('flood-line')) map.setLayoutProperty('flood-line', 'visibility', visible);
 });
 
-function stop3DRotation() {
-  state.rotating3d = false;
-  state.rotationLastTime = null;
-  if (state.rotationFrame) cancelAnimationFrame(state.rotationFrame);
-  state.rotationFrame = null;
-  el('pitch-btn')?.classList.remove('is-active');
-  el('pitch-btn')?.setAttribute('aria-pressed', 'false');
-}
-
-function rotate3DFrame(timestamp) {
-  if (!state.rotating3d) return;
-  if (state.rotationLastTime === null) state.rotationLastTime = timestamp;
-  const delta = Math.min(50, timestamp - state.rotationLastTime);
-  state.rotationLastTime = timestamp;
-  const nextBearing = map.getBearing() + delta * 0.0045;
-  map.setBearing(nextBearing);
-  state.rotationFrame = requestAnimationFrame(rotate3DFrame);
-}
-
-function start3DRotation() {
-  state.rotating3d = true;
-  state.rotationLastTime = null;
-  el('pitch-btn')?.classList.add('is-active');
-  el('pitch-btn')?.setAttribute('aria-pressed', 'true');
-  map.easeTo({ pitch: 55, duration: 500 });
-  state.rotationFrame = requestAnimationFrame(rotate3DFrame);
-}
-
-el('pitch-btn').addEventListener('click', () => {
-  if (state.rotating3d) {
-    stop3DRotation();
-    return;
+document.querySelectorAll('[data-camera]').forEach((button) => {
+  button.addEventListener('click', () => adjustCamera(button.dataset.camera));
+});
+el('basemap-btn').addEventListener('click', () => {
+  const open = el('basemap-menu').classList.contains('is-hidden');
+  el('basemap-menu').classList.toggle('is-hidden', !open);
+  el('basemap-btn').setAttribute('aria-expanded', String(open));
+});
+document.querySelectorAll('[data-basemap]').forEach((button) => {
+  button.addEventListener('click', () => {
+    state.basemap = button.dataset.basemap;
+    applyBasemap();
+    el('basemap-menu').classList.add('is-hidden');
+    el('basemap-btn').setAttribute('aria-expanded', 'false');
+  });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    el('basemap-menu').classList.add('is-hidden');
+    el('basemap-btn').setAttribute('aria-expanded', 'false');
   }
-  start3DRotation();
 });
 
 el('terrain-btn').addEventListener('click', () => {
@@ -576,9 +660,6 @@ el('relief-btn').addEventListener('click', () => {
     : TERRAIN_EXAGGERATION_HIGH;
   applyTerrainView();
 
-  if (state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH && map.getPitch() < 35) {
-    map.easeTo({ pitch: 55, duration: 500 });
-  }
 });
 
 el('boundary-btn').addEventListener('click', () => {
@@ -587,6 +668,10 @@ el('boundary-btn').addEventListener('click', () => {
     if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', state.boundaryEnabled ? 'visible' : 'none');
   });
   el('boundary-btn').classList.toggle('is-active', state.boundaryEnabled);
+  el('boundary-btn').setAttribute('aria-pressed', String(state.boundaryEnabled));
 });
 
+setMapControlsEnabled(false);
+initializeMap();
+refreshSensors();
 setInterval(() => refreshSensors(false), REFRESH_MS);

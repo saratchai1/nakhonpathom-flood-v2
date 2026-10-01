@@ -3,3 +3,16 @@
 .change-cell{font-variant-numeric:tabular-nums;font-weight:800}.change-cell.rising{color:#dc2626}.change-cell.falling{color:#0f766e}.change-cell.steady{color:#64748b}.status-pill.unknown{background:#f1f5f9;color:#64748b}
 
 .relief-badge{display:inline-flex;align-items:center;margin-top:9px;padding:5px 8px;border-radius:999px;background:#eef6ff;color:#1d4ed8;font-size:9px;font-weight:800;border:1px solid #bfdbfe}.map-action#relief-btn.is-active{background:#eef6ff;color:#1d4ed8;border-color:#93c5fd}.map-action#relief-btn:not(.is-active){background:rgba(255,255,255,.94);color:#64748b;border-color:#dce4eb}
+
+/* Keep controls above attribution and clear of the station detail sheet. */
+.map-actions{display:flex;flex-direction:column;align-items:flex-end;max-width:calc(100% - 36px);bottom:70px;z-index:14}
+.map-toolbar,.camera-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.camera-controls{background:rgba(255,255,255,.96);padding:6px;border-radius:12px;border:1px solid #dce4eb}
+#camera-readout{font-size:10px;color:#475569;padding:0 5px;font-variant-numeric:tabular-nums}
+.camera-controls .map-action{min-width:40px;min-height:40px;font-size:18px;padding:6px}
+.basemap-control{position:relative}.basemap-menu{position:absolute;right:0;bottom:calc(100% + 8px);padding:7px;min-width:185px;display:grid;gap:6px;background:white;border:1px solid #dce4eb;border-radius:12px;box-shadow:var(--shadow)}
+.basemap-menu .is-active{background:#e7f7f3}.map-action:disabled{opacity:.5;cursor:not-allowed}.map-action:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+.map-status{position:absolute;z-index:9;top:40%;left:50%;transform:translateX(-50%);max-width:500px;width:calc(100% - 36px);padding:16px;border-radius:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:13px;line-height:1.6}
+.screening-note{font-size:10px;line-height:1.45;color:#64748b;margin:8px 0 0}
+@media(max-width:900px){.map-actions{right:10px;bottom:75px;max-width:calc(100% - 20px)}.map-toolbar{gap:4px}.map-toolbar .map-action{padding:8px;font-size:10px;min-height:40px}.camera-controls{gap:4px}.map-status{top:52%;font-size:11px}.maplibregl-ctrl-attrib{max-width:calc(100vw - 20px);font-size:9px}.detail-panel{bottom:185px;max-height:calc(100% - 195px)}.live-block{display:flex;min-width:0;margin-left:auto}.live-time,.live-block .icon-btn{display:none}.live-title{font-size:9px}.brand-title{font-size:11px}}
+@media(max-width:540px){.overview-panel.compact .metrics,.overview-panel.compact .model-card,.overview-panel.compact .station-summary-head,.overview-panel.compact .priority-list{display:none}.overview-panel.compact .panel-head{margin-bottom:0;border:0;padding-bottom:0}.map-toolbar{max-width:370px}.map-toolbar .map-action{font-size:9px}.camera-controls .map-action{min-width:38px}.brand-title{max-width:130px}.live-title{max-width:125px}}

@@ -7,7 +7,7 @@
   <title>Nakhon Pathom Flood Digital Twin</title>
   <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=20261001-10x" />
 </head>
 <body>
   <div id="app">
@@ -35,6 +35,7 @@
 
     <main>
       <div id="map" aria-label="แผนที่ Digital Twin จังหวัดนครปฐม"></div>
+      <div id="map-status" class="map-status is-hidden" role="status"></div>
 
       <section id="overview-panel" class="panel overview-panel">
         <div class="panel-head">
@@ -69,10 +70,10 @@
               <strong>Flood contour จาก DEM</strong>
               <p>คำนวณระดับผิวน้ำ ม.รทก. เทียบกับภูมิประเทศจริง</p>
             </div>
-            <label class="switch"><input id="contour-toggle" type="checkbox" checked /><span></span></label>
+            <label class="switch"><input aria-label="แสดง flood contour" id="contour-toggle" type="checkbox" checked /><span></span></label>
           </div>
           <div class="model-controls">
-            <button id="rebuild-model" class="primary-btn">คำนวณ contour</button>
+            <button data-map-control id="rebuild-model" class="primary-btn">คำนวณ contour</button>
             <span id="model-status">รอ DEM พร้อม</span>
           </div>
           <div class="legend">
@@ -82,7 +83,7 @@
             <span><i class="depth-4"></i> 0.50–1.00 ม.</span>
             <span><i class="depth-5"></i> &gt;1.00 ม.</span>
           </div>
-          <div id="relief-badge" class="relief-badge">Vertical exaggeration ×5</div><p class="model-note">มุมมองภูมิประเทศขยายความสูง ×5 เพื่อให้พื้นที่ราบเห็นสูง–ต่ำชัดขึ้น แต่ DEM, ระดับน้ำ และค่าที่ใช้คำนวณ contour ยังเป็นค่าจริง ไม่ได้คูณ 5</p>
+          <div id="relief-badge" class="relief-badge">Vertical exaggeration ×10</div><p class="model-note">มุมมองภูมิประเทศขยายความสูง ×10 เพื่อให้พื้นที่ราบเห็นสูง–ต่ำชัดขึ้น แต่ DEM, ระดับน้ำ และค่าที่ใช้คำนวณ contour ยังเป็นค่าจริง ไม่ได้คูณ 10</p><p class="screening-note">เป็นการคัดกรองจาก DEM และสถานีตรวจวัด ไม่ใช่ขอบเขตน้ำท่วมรับรองอย่างเป็นทางการ หรือแบบจำลองอุทกพลศาสตร์ 2D</p>
         </div>
 
         <div class="station-summary-head">
@@ -98,7 +99,7 @@
             <div class="eyebrow">Realtime sensor</div>
             <h2>ระดับน้ำแต่ละคลอง / สถานี</h2>
           </div>
-          <button id="fit-stations" class="ghost-btn">ดูทั้งหมด</button>
+          <button data-map-control id="fit-stations" class="ghost-btn">ดูทั้งหมด</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -134,10 +135,27 @@
       </aside>
 
       <div class="map-actions">
-        <button id="pitch-btn" class="map-action" aria-pressed="false" title="เริ่ม/หยุดการหมุนมุมมอง 3D">3D หมุน</button>
-        <button id="terrain-btn" class="map-action is-active">ภูมิประเทศ</button>
-        <button id="relief-btn" class="map-action is-active" aria-pressed="true" title="สลับความสูงแสดงผล 1× / 5×">ความสูง ×5</button>
-        <button id="boundary-btn" class="map-action is-active">ขอบเขตจังหวัด</button>
+        <div class="map-toolbar">
+          <div class="basemap-control">
+            <button id="basemap-btn" class="map-action" aria-expanded="false" aria-controls="basemap-menu" data-map-control>ชั้นแผนที่ · แผนที่</button>
+            <div id="basemap-menu" class="basemap-menu is-hidden" role="group" aria-label="ชั้นแผนที่พื้นหลัง">
+              <button class="map-action is-active" data-basemap="map" aria-pressed="true" data-map-control>แผนที่</button>
+              <button class="map-action" data-basemap="satellite" aria-pressed="false" data-map-control>ดาวเทียม</button>
+              <button class="map-action" data-basemap="contour" aria-pressed="false" data-map-control>ภูมิประเทศ / Contour</button>
+            </div>
+          </div>
+          <button id="terrain-btn" class="map-action is-active" aria-pressed="true" data-map-control>ภูมิประเทศ 3D</button>
+          <button id="relief-btn" class="map-action is-active" aria-pressed="true" title="สลับความสูงแสดงผล 1× / 10×" data-map-control>ความสูง ×10</button>
+          <button id="boundary-btn" class="map-action is-active" aria-pressed="true" data-map-control>ขอบเขตจังหวัด</button>
+        </div>
+        <div class="camera-controls" role="group" aria-label="ควบคุมมุมมอง 3D ด้วยตัวเอง">
+          <span id="camera-readout">ทิศ −7° · เงย 55°</span>
+          <button class="map-action" data-camera="left" aria-label="หมุนซ้าย" title="หมุนซ้าย 15°" data-map-control>↺</button>
+          <button class="map-action" data-camera="right" aria-label="หมุนขวา" title="หมุนขวา 15°" data-map-control>↻</button>
+          <button class="map-action" data-camera="up" aria-label="เพิ่ม pitch" title="เงยเพิ่ม 10°" data-map-control>↑</button>
+          <button class="map-action" data-camera="down" aria-label="ลด pitch" title="ลดมุมเงย 10°" data-map-control>↓</button>
+          <button class="map-action" data-camera="north" aria-label="กลับทิศเหนือ" title="กลับทิศเหนือโดยคงจุดศูนย์กลางและซูม" data-map-control>N</button>
+        </div>
       </div>
 
       <div class="attribution-note">Sensor: water.su.ac.th / CSV ที่ผู้ใช้ให้ • DEM: AWS Terrain Tiles • Basemap: OpenFreeMap / OpenStreetMap</div>
@@ -145,6 +163,6 @@
   </div>
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/app.js?v=20261001-10x"></script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+> Historical QA snapshot from the earlier 10x/manual-camera deployment. For the newer depth-heatmap implementation and deployment, see [FLOOD_HEATMAP.md](FLOOD_HEATMAP.md).
+
 # Work implementation and deployment QA — 2026-10-01
 
 ## Overall result: BLOCKED — acceptance is not fully verified

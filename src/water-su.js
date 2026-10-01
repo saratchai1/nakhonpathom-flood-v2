@@ -341,51 +341,71 @@ function queryVariants(url) {
   return [...new Set(out)];
 }
 
-async function tryLive() {
-  const urls = await discoverDataUrls();
-  const attempts = [];
-  let attemptCount = 0;
+async function tryLiveCandidate(candidate, attempts) {
+  for (const url of queryVariants(candidate).slice(0, 2)) {
+    try {
+      const response = await fetchWithTimeout(url);
+      attempts.push({ url, status: response.status });
+      if (!response.ok) continue;
 
-  for (const candidate of urls.slice(0, 30)) {
-    for (const url of queryVariants(candidate).slice(0, 2)) {
-      if (attemptCount >= 24) return { rows: [], sourceUrl: null, attempts };
-      attemptCount += 1;
-      try {
-        const response = await fetchWithTimeout(url);
-        attempts.push({ url, status: response.status });
-        if (!response.ok) continue;
+      const rows = await decodeResponse(response);
+      let useful = latestByDevice(rows).filter((row) =>
+        row.water_msl_m !== null || row.water_depth_m !== null || row.freeboard_m !== null
+      );
 
-        const rows = await decodeResponse(response);
-        let useful = latestByDevice(rows).filter((row) =>
-          row.water_msl_m !== null || row.water_depth_m !== null || row.freeboard_m !== null
-        );
+      if (useful.length < 3) continue;
 
-        if (useful.length >= 3) {
-          // The official "latest-all" endpoint has authoritative station position/status,
-          // while "readings/latest" also carries rainfall. Merge rainfall when available.
-          if (candidate.includes('/api/v1/water/latest-all')) {
-            try {
-              const rainfallResponse = await fetchWithTimeout(OFFICIAL_READINGS_URL);
-              if (rainfallResponse.ok) {
-                const rainfallRows = latestByDevice(await decodeResponse(rainfallResponse));
-                const rainfallById = new Map(rainfallRows.map((row) => [row.device_id, row]));
-                useful = useful.map((row) => {
-                  const extra = rainfallById.get(row.device_id);
-                  return {
-                    ...row,
-                    TotalRainFall: extra?.TotalRainFall ?? row.TotalRainFall
-                  };
-                });
-              }
-            } catch {}
+      if (candidate.includes('/api/v1/water/latest-all')) {
+        try {
+          const rainfallResponse = await fetchWithTimeout(OFFICIAL_READINGS_URL);
+          if (rainfallResponse.ok) {
+            const rainfallRows = latestByDevice(await decodeResponse(rainfallResponse));
+            const rainfallById = new Map(rainfallRows.map((row) => [row.device_id, row]));
+            useful = useful.map((row) => {
+              const extra = rainfallById.get(row.device_id);
+              return {
+                ...row,
+                TotalRainFall: extra?.TotalRainFall ?? row.TotalRainFall
+              };
+            });
           }
-          return { rows: useful, sourceUrl: candidate, attempts };
-        }
-      } catch (error) {
-        attempts.push({ url, error: error?.name || 'fetch_error' });
+        } catch {}
       }
+
+      return { rows: useful, sourceUrl: candidate, attempts };
+    } catch (error) {
+      attempts.push({ url, error: error?.name || 'fetch_error' });
     }
   }
+  return null;
+}
+
+async function tryLive() {
+  const attempts = [];
+
+  // Fast path: use the verified official endpoint immediately. Discovery is only
+  // a recovery path if the public API changes in the future.
+  const directCandidates = [...new Set([
+    resolveUrl(EXPLICIT_DATA_URL),
+    OFFICIAL_LATEST_URL
+  ].filter(Boolean))];
+
+  for (const candidate of directCandidates) {
+    const result = await tryLiveCandidate(candidate, attempts);
+    if (result) return result;
+  }
+
+  const discovered = await discoverDataUrls();
+  const fallbackCandidates = discovered
+    .filter((candidate) => !directCandidates.includes(candidate))
+    .slice(0, 22);
+
+  for (const candidate of fallbackCandidates) {
+    if (attempts.length >= 24) break;
+    const result = await tryLiveCandidate(candidate, attempts);
+    if (result) return result;
+  }
+
   return { rows: [], sourceUrl: null, attempts };
 }
 

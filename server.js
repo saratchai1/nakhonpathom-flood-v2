@@ -8,6 +8,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
 const port = Number(process.env.PORT || 3000);
 const startupProbeEnabled = process.env.WATER_SU_STARTUP_PROBE !== '0';
+const debugShapeEnabled = process.env.WATER_SU_DEBUG_SHAPE !== '0';
 
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -47,6 +48,47 @@ async function serveStatic(req, res, pathname) {
     } catch {
       json(res, 404, { error: 'not_found' });
     }
+  }
+}
+
+
+async function summarizeEndpointShape(url) {
+  try {
+    const response = await fetch(url, { headers: { accept: 'application/json,text/plain,*/*' } });
+    const text = await response.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch {}
+
+    const summarize = (value, depth = 0) => {
+      if (depth > 3) return typeof value;
+      if (Array.isArray(value)) {
+        return {
+          type: 'array',
+          length: value.length,
+          first: value.length ? summarize(value[0], depth + 1) : null
+        };
+      }
+      if (value && typeof value === 'object') {
+        const keys = Object.keys(value).slice(0, 30);
+        const sample = {};
+        for (const key of keys) {
+          const item = value[key];
+          if (item === null || ['string', 'number', 'boolean'].includes(typeof item)) sample[key] = item;
+          else sample[key] = summarize(item, depth + 1);
+        }
+        return { type: 'object', keys, sample };
+      }
+      return value;
+    };
+
+    return {
+      url,
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      shape: parsed === null ? { type: 'text', preview: text.slice(0, 500) } : summarize(parsed)
+    };
+  } catch (error) {
+    return { url, error: error?.message || String(error) };
   }
 }
 
@@ -106,6 +148,17 @@ server.listen(port, '0.0.0.0', () => {
           event: 'water_su_startup_probe_error',
           error: error?.message || String(error)
         }));
+      }
+
+      if (debugShapeEnabled) {
+        const endpoints = [
+          'https://water.su.ac.th/api/v1/readings/latest',
+          'https://water.su.ac.th/api/v1/devices',
+          'https://water.su.ac.th/api/v1/water/latest-all'
+        ];
+        const shapes = [];
+        for (const endpoint of endpoints) shapes.push(await summarizeEndpointShape(endpoint));
+        console.log(JSON.stringify({ event: 'water_su_endpoint_shapes', shapes }));
       }
     }, 750);
   }

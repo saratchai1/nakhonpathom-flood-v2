@@ -4,6 +4,8 @@ import * as turf from 'https://cdn.jsdelivr.net/npm/@turf/turf@7/+esm';
 const MAP_BOUNDS = [99.86, 13.62, 100.29, 13.96];
 const FLOOD_THRESHOLDS = [0.05, 0.15, 0.30, 0.50, 1.00, 1.50];
 const REFRESH_MS = 60_000;
+const TERRAIN_EXAGGERATION_NORMAL = 1;
+const TERRAIN_EXAGGERATION_HIGH = 5;
 
 const state = {
   sensors: [],
@@ -14,6 +16,7 @@ const state = {
   modelReady: false,
   modelRunning: false,
   terrainEnabled: true,
+  terrainExaggeration: TERRAIN_EXAGGERATION_HIGH,
   boundaryEnabled: true
 };
 
@@ -25,7 +28,7 @@ const map = new maplibregl.Map({
   style: 'https://tiles.openfreemap.org/styles/bright',
   center: [100.075, 13.805],
   zoom: 10.35,
-  pitch: 48,
+  pitch: 55,
   bearing: -7,
   antialias: true,
   hash: false
@@ -64,14 +67,55 @@ function addTerrain() {
       type: 'hillshade',
       source: 'terrain-dem',
       paint: {
-        'hillshade-exaggeration': 0.22,
+        'hillshade-exaggeration': 0.62,
         'hillshade-shadow-color': '#50657b',
         'hillshade-highlight-color': '#ffffff'
       }
     });
   }
-  map.setTerrain({ source: 'terrain-dem', exaggeration: 1.15 });
   state.terrainEnabled = true;
+  state.terrainExaggeration = TERRAIN_EXAGGERATION_HIGH;
+  applyTerrainView();
+}
+
+function applyTerrainView() {
+  if (!map.getSource('terrain-dem')) return;
+
+  if (state.terrainEnabled) {
+    map.setTerrain({ source: 'terrain-dem', exaggeration: state.terrainExaggeration });
+    if (map.getLayer('terrain-hillshade')) {
+      map.setLayoutProperty('terrain-hillshade', 'visibility', 'visible');
+      map.setPaintProperty(
+        'terrain-hillshade',
+        'hillshade-exaggeration',
+        state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH ? 0.62 : 0.28
+      );
+    }
+  } else {
+    map.setTerrain(null);
+    if (map.getLayer('terrain-hillshade')) map.setLayoutProperty('terrain-hillshade', 'visibility', 'none');
+  }
+
+  const terrainButton = el('terrain-btn');
+  if (terrainButton) terrainButton.classList.toggle('is-active', state.terrainEnabled);
+
+  const reliefButton = el('relief-btn');
+  if (reliefButton) {
+    const isHigh = state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH;
+    reliefButton.textContent = `ความสูง ×${isHigh ? 5 : 1}`;
+    reliefButton.classList.toggle('is-active', isHigh && state.terrainEnabled);
+    reliefButton.setAttribute(
+      'aria-pressed',
+      String(isHigh && state.terrainEnabled)
+    );
+  }
+
+  const reliefBadge = el('relief-badge');
+  if (reliefBadge) {
+    reliefBadge.textContent = state.terrainEnabled
+      ? `Vertical exaggeration ×${state.terrainExaggeration}`
+      : 'ปิดภูมิประเทศ 3D';
+  }
 }
 
 async function addProvinceBoundary() {
@@ -489,9 +533,19 @@ el('pitch-btn').addEventListener('click', () => {
 
 el('terrain-btn').addEventListener('click', () => {
   state.terrainEnabled = !state.terrainEnabled;
-  map.setTerrain(state.terrainEnabled ? { source: 'terrain-dem', exaggeration: 1.15 } : null);
-  if (map.getLayer('terrain-hillshade')) map.setLayoutProperty('terrain-hillshade', 'visibility', state.terrainEnabled ? 'visible' : 'none');
-  el('terrain-btn').classList.toggle('is-active', state.terrainEnabled);
+  applyTerrainView();
+});
+
+el('relief-btn').addEventListener('click', () => {
+  state.terrainEnabled = true;
+  state.terrainExaggeration = state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH
+    ? TERRAIN_EXAGGERATION_NORMAL
+    : TERRAIN_EXAGGERATION_HIGH;
+  applyTerrainView();
+
+  if (state.terrainExaggeration === TERRAIN_EXAGGERATION_HIGH && map.getPitch() < 35) {
+    map.easeTo({ pitch: 55, duration: 500 });
+  }
 });
 
 el('boundary-btn').addEventListener('click', () => {

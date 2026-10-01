@@ -17,7 +17,10 @@ const state = {
   modelRunning: false,
   terrainEnabled: true,
   terrainExaggeration: TERRAIN_EXAGGERATION_HIGH,
-  boundaryEnabled: true
+  boundaryEnabled: true,
+  rotating3d: false,
+  rotationFrame: null,
+  rotationLastTime: null
 };
 
 const el = (id) => document.getElementById(id);
@@ -525,10 +528,40 @@ el('contour-toggle').addEventListener('change', (event) => {
   if (map.getLayer('flood-line')) map.setLayoutProperty('flood-line', 'visibility', visible);
 });
 
+function stop3DRotation() {
+  state.rotating3d = false;
+  state.rotationLastTime = null;
+  if (state.rotationFrame) cancelAnimationFrame(state.rotationFrame);
+  state.rotationFrame = null;
+  el('pitch-btn')?.classList.remove('is-active');
+  el('pitch-btn')?.setAttribute('aria-pressed', 'false');
+}
+
+function rotate3DFrame(timestamp) {
+  if (!state.rotating3d) return;
+  if (state.rotationLastTime === null) state.rotationLastTime = timestamp;
+  const delta = Math.min(50, timestamp - state.rotationLastTime);
+  state.rotationLastTime = timestamp;
+  const nextBearing = map.getBearing() + delta * 0.0045;
+  map.setBearing(nextBearing);
+  state.rotationFrame = requestAnimationFrame(rotate3DFrame);
+}
+
+function start3DRotation() {
+  state.rotating3d = true;
+  state.rotationLastTime = null;
+  el('pitch-btn')?.classList.add('is-active');
+  el('pitch-btn')?.setAttribute('aria-pressed', 'true');
+  map.easeTo({ pitch: 55, duration: 500 });
+  state.rotationFrame = requestAnimationFrame(rotate3DFrame);
+}
+
 el('pitch-btn').addEventListener('click', () => {
-  const pitched = map.getPitch() > 15;
-  map.easeTo({ pitch: pitched ? 0 : 55, bearing: pitched ? 0 : -7, duration: 650 });
-  el('pitch-btn').classList.toggle('is-active', !pitched);
+  if (state.rotating3d) {
+    stop3DRotation();
+    return;
+  }
+  start3DRotation();
 });
 
 el('terrain-btn').addEventListener('click', () => {

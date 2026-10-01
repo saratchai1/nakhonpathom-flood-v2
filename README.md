@@ -37,7 +37,10 @@ Digital twin สำหรับติดตามสถานการณ์น�
 ### ภาพรวมพื้นที่
 
 - MapLibre 3D
+- ปุ่ม `3D หมุน` สำหรับเริ่ม/หยุด auto-rotation ของมุมมอง 3D
 - DEM Terrarium + hillshade
+- vertical exaggeration เริ่มต้นที่ `×5` เพื่อให้ภูมิประเทศราบเห็นความสูง–ต่ำชัดขึ้น
+- มีปุ่มสลับ `ความสูง ×1 / ×5`; เป็นการขยายเฉพาะการแสดงผล ไม่เปลี่ยน DEM/ระดับน้ำที่ใช้คำนวณ
 - ขอบเขตจังหวัดนครปฐม
 - sensor marker ตามพิกัด realtime จาก official API
 - สีสถานะ `ปกติ / เฝ้าระวัง / วิกฤต / ข้อมูลล่าช้า`
@@ -68,6 +71,8 @@ Digital twin สำหรับติดตามสถานการณ์น�
 7. สร้าง contour ที่ 0.05, 0.15, 0.30, 0.50, 1.00 และ 1.50 เมตร
 
 > Contour ปัจจุบันเป็น **DEM + sensor screening model** ไม่ใช่ผลจาก 2D hydrodynamic solver และไม่ใช่ขอบเขตน้ำท่วมรับรองทางราชการ
+>
+> `Vertical exaggeration ×5` มีผลเฉพาะการมองเห็นภูมิประเทศใน 3D เท่านั้น การคำนวณ contour ใช้ elevation จริงด้วย `queryTerrainElevation(..., { exaggerated: false })`
 
 สิ่งที่ยังต้องเพิ่มหากต้องการแบบจำลองเชิง hydraulic เต็มรูปแบบ ได้แก่ flow routing, drainage network, culvert/pipe, flood gate, levee/road barrier, roughness และ boundary conditions
 

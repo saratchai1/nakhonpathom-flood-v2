@@ -16,6 +16,7 @@ let cached = null;
 let cachedAt = 0;
 let discoveredUrls = [];
 let discoveredScripts = [];
+let scriptHints = [];
 let discoveryAt = 0;
 let fallbackCache = null;
 let stationCache = null;
@@ -215,6 +216,13 @@ async function discoverDataUrls() {
           if (!scriptResponse.ok) continue;
           const js = await scriptResponse.text();
           discoverCandidatesFromText(js, scriptUrl).forEach((url) => discovered.add(url));
+          if (new URL(scriptUrl).hostname === new URL(BASE_URL).hostname) {
+            const hints = js.split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => /(fetch\s*\(|axios|water[_-]?data|timeseries|download|export|\.csv|\.json|\.php|api\b|endpoint|supabase)/i.test(line))
+              .map((line) => line.slice(0, 800));
+            scriptHints = [...new Set([...scriptHints, ...hints])].slice(0, 80);
+          }
         } catch {}
       }
     } catch {}
@@ -322,6 +330,7 @@ async function buildPayload(live, fallback, stations) {
       discoveredCandidates: discoveredUrls.length,
       candidateUrls: discoveredUrls.slice(0, 24),
       scriptUrls: discoveredScripts.slice(0, 24),
+      scriptHints: scriptHints.slice(0, 40),
       attempts: live.attempts.slice(-18)
     }
   };
@@ -365,6 +374,7 @@ export function resetCacheForTests() {
   cachedAt = 0;
   discoveredUrls = [];
   discoveredScripts = [];
+  scriptHints = [];
   discoveryAt = 0;
   backgroundRefresh = null;
 }

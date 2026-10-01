@@ -1,0 +1,15 @@
+[
+  {"id":"N1","name":"วัดวังตะกู","lat":13.8440992,"lng":100.0273576,"group":"คลองเจดีย์บูชา","coordSource":"public location reference"},
+  {"id":"N2","name":"วัดหนองดินแดง","lat":13.7954514,"lng":99.9903811,"group":"คลองสาขา","coordSource":"public location reference"},
+  {"id":"N3","name":"รพ.สต.บางแขม","lat":13.7318940,"lng":100.0338697,"group":"คลองสาขา","coordSource":"ตำบลบางแขม reference; verify sensor pin"},
+  {"id":"N4","name":"พะเนียด","lat":13.7932900,"lng":100.1316700,"group":"คลองสาขา","coordSource":"public location reference"},
+  {"id":"N5","name":"บางระกำ","lat":13.7786470,"lng":100.1311030,"group":"คลองสาขา","coordSource":"public location reference"},
+  {"id":"N6","name":"คลองจินดา","lat":13.7061100,"lng":100.1777500,"group":"คลองจินดา","coordSource":"public location reference"},
+  {"id":"N7","name":"ธรรมศาลา 9/1","lat":13.8070000,"lng":100.0990000,"group":"คลองเจดีย์บูชา","coordSource":"map-estimated; verify sensor pin"},
+  {"id":"N8","name":"สระแก้ว มหาวิทยาลัยศิลปากร","lat":13.8187800,"lng":100.0412500,"group":"พื้นที่มหาวิทยาลัยศิลปากร","coordSource":"map-estimated; verify sensor pin"},
+  {"id":"N9","name":"วัดธรรมศาลา","lat":13.8087772,"lng":100.1165271,"group":"คลองเจดีย์บูชา","coordSource":"public location reference"},
+  {"id":"N9-2","name":"วัดศีรษะทอง","lat":13.8092000,"lng":100.1584364,"group":"คลองเจดีย์บูชา","coordSource":"public location reference"},
+  {"id":"N10","name":"วัดบ้านยาง","lat":13.8457520,"lng":99.9228030,"group":"คลองสาขา","coordSource":"public location reference"},
+  {"id":"N11","name":"ชุมชนกั๋งบ๊วย","lat":13.8175000,"lng":100.0520000,"group":"คลองเจดีย์บูชา","coordSource":"map-estimated; verify sensor pin"},
+  {"id":"N12","name":"วัดงิ้วราย","lat":13.8083404,"lng":100.2181185,"group":"แม่น้ำนครชัยศรี/ท่าจีน","coordSource":"public location reference"}
+]
